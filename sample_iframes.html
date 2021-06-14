@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>
+        Iframe Example
+    </title>
+    <style>
+        .highlight_element {
+            outline: 5px dashed yellow;
+        }
+
+        .add_border {
+            border: 2px solid black;
+        }
+
+        .body {
+            border: 2px solid black;
+            scroll-behavior: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="main-frame-div-1">
+        <button id='popper' hidden></button>
+        <button onclick="initiateWorkflow()">Click here to begin the workflow</button>
+        <p>Enter your message below</p><br />
+        <input id="main-frame-div1-inp1" type="text"></input><br /><br />
+        <button onclick="sendMessage(event)" id="main-frame-div1-send">Send</button>
+        <div id="main-frame-messages">
+            <h5>Your Messages</h5>
+        </div>
+    </div>
+    <div id="iframe-1-div" class="add_border"></div>
+    <div id="iframe-2-div" class="add_border"></div>
+    <script>
+
+        //Workflow
+        var workflow = {
+            name: 'frames flow',
+            steps: [
+                {
+                    name: 'step1',
+                    content: 'Click here to send a message to iframe1',
+                    iframes: [],
+                    selector: '#main-frame-div1-send',
+                    type: 'click'
+                },
+                {
+                    name: 'step2',
+                    content: 'Click here to send a message to main frame',
+                    iframes: ['#iframe1'],
+                    selector: '#iframe1-div1-send',
+                    type: 'click'
+                }
+            ]
+        };
+
+        //Workflow Initiation
+        var cur_step_index = 0;
+        function initiateWorkflow() {
+            //starting with the 1st step
+            var step = workflow.steps[cur_step_index];
+            //function to highlight the step with a popper
+            startWorkflow(step)
+        }
+
+        //Executing current step in the Workflow
+        function startWorkflow(step) {
+            //identifying iframes if any
+            if (step.iframes.length === 0) {
+                console.log("In main" + step.content);
+                var target = document.querySelector(step.selector);
+                var tooltip = document.querySelector('#popper');
+                tooltip.innerHTML = step.content;
+                tooltip.removeAttribute('hidden');
+                target.insertAdjacentElement('afterend', tooltip)
+                console.log(target);
+                target.classList.add('highlight_element');
+            }
+
+            else {
+                console.log("In iframe" + step.content);
+                var frame = document.querySelector(step.iframes[0])
+                var target = frame.contentDocument.querySelector(step.selector);
+                target.style.outline = '5px dashed yellow';
+                var tooltip = frame.contentDocument.querySelector('#popper');
+                tooltip.innerHTML = step.content;
+                tooltip.removeAttribute('hidden');
+                target.insertAdjacentElement('afterend', tooltip)
+            }
+        }
+        //Once the button is clicked..we can move to the next step
+        function moveToNextStep(e) {
+            cur_step_index++;
+            e.target.classList.remove('highlight_element');
+            document.getElementById('popper').setAttribute('hidden', 'true');
+            var step = workflow.steps[cur_step_index];
+            if(cur_step_index<workflow.steps.length)
+            startWorkflow(step);
+        }
+        function sendMessage(event) {
+            moveToNextStep(event)
+            var current_input = document.getElementById("main-frame-div1-inp1");
+            var current_data = current_input.value;
+            var message = { message: current_data };
+            window.postMessage(message, '*');
+            var frame1 = document.getElementById('iframe1');
+            frame1.contentWindow.postMessage(message, '*')
+            var frame2 = document.getElementById('iframe2');
+            frame2.contentWindow.postMessage(message, '*')
+        }
+
+        window.addEventListener('message', function (event) {
+            var target_div = document.getElementById("main-frame-messages");
+            var element = document.createElement('div');
+            element.innerHTML = event.data.message;
+            if (event.data.message !== undefined) {
+                target_div.appendChild(element);
+            }
+        });
+
+        //iFrame-1
+        var iframe1_div = document.getElementById("iframe-1-div");
+        var iframe1 = document.createElement("iframe");
+        iframe1.setAttribute('src', 'about:blank');
+        iframe1.setAttribute('id', 'iframe1');
+        iframe1_div.appendChild(iframe1);
+        var iframe1_window = iframe1.contentWindow;
+        var iframe1_doc = iframe1.contentDocument || iframe1_window.document;
+        var frame_head = iframe1_doc.getElementsByTagName('head')[0];
+        var style_tag = document.createElement('style');
+        style_tag.innerHTML = ".highlight_element{outline:5px dashed yellow;}"
+        frame_head.appendChild(style_tag);
+        iframe1_doc.open();
+        iframe1_doc.write(`
+        <script>
+        function sendMessage(event){
+            moveToNextStep(event);
+            var current_input=document.getElementById("iframe1-div1-inp1");
+            var current_data=current_input.value;
+            var message={message: current_data};
+            window.postMessage(message,'*');
+            window.top.postMessage(message,'*');
+        }
+        window.addEventListener('message',function(event){
+            var target_div=document.getElementById("iframe1-messages");
+            var element=document.createElement('div');
+            element.innerHTML=event.data.message;
+            target_div.appendChild(element);
+        });
+        function moveToNextStep(e){
+            e.target.style.outline='none'
+            document.getElementById('popper').setAttribute('hidden','true');
+            var cur_step_index=++window.top.cur_step_index;
+            var steps_len=window.top.workflow.steps.length
+            if(cur_step_index<steps_len)
+            window.top.startWorkflow(window.top.workflow.steps[cur_step_index]);
+        }
+        <\/script>
+            <div id="iframe-1-div" style="max-height: 200px">
+                <button id='popper' hidden></button>
+            <h5>This is iframe-1</h5>
+            <p>Enter your message below</p><br/>
+            <input id="iframe1-div1-inp1" type="text"></input><br/><br/>
+            <button onclick="sendMessage(event)" id="iframe1-div1-send">Send</button>
+            <div id="iframe1-messages">
+                <h5>Your Messages</h5>
+                </div>
+            </div>
+        `);
+        iframe1_doc.close();
+
+        //iFrame-2
+        var iframe2_div = document.getElementById("iframe-2-div");
+        var iframe2 = document.createElement("iframe");
+        iframe2.setAttribute('src', 'about:blank');
+        iframe2.setAttribute('id', 'iframe2');
+        iframe2_div.appendChild(iframe2);
+        var iframe2_window = iframe2.contentWindow;
+        var iframe2_doc = iframe2.contentDocument || iframe2_window.document;
+        iframe2_doc.open();
+        iframe2_doc.write(`
+        <script>
+        window.addEventListener('message',function(event){
+            var target_div=document.getElementById("iframe2-messages");
+            var element=document.createElement('div');
+            element.innerHTML=event.data.message;
+            target_div.appendChild(element);
+        });
+        <\/script>
+            <div id="iframe-2-div" style="max-height: 200px;">
+                <button id='popper' hidden></button>
+            <h5>This is iframe-2</h5>
+            <p>Enter your message below</p><br/>
+            <input id="iframe2-div1-inp1" type="text"></input><br/><br/>
+            <button onclick="sendMessage()" id="iframe2-div1-send">Send</button>
+            <div id="iframe2-messages">
+                <h5>Your Messages</h5>
+                </div>
+            </div>
+        `);
+        iframe2_doc.close();
+    </script>
+</body>
+</html>
